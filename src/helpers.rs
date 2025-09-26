@@ -19,7 +19,7 @@ pub(crate) fn next_nonce() -> u64 {
         info!("nonce progressed too far ahead {nonce} {now_ms}");
     }
     // more than 300 seconds behind
-    if nonce + 300000 < now_ms {
+    if nonce + 5000 < now_ms {
         CUR_NONCE.fetch_max(now_ms + 1, Ordering::Relaxed);
         return now_ms;
     }
