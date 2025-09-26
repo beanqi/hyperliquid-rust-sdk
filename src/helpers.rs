@@ -13,17 +13,33 @@ fn now_timestamp_ms() -> u64 {
 }
 
 pub(crate) fn next_nonce() -> u64 {
-    let nonce = CUR_NONCE.fetch_add(1, Ordering::Relaxed);
-    let now_ms = now_timestamp_ms();
-    if nonce > now_ms + 1000 {
-        info!("nonce progressed too far ahead {nonce} {now_ms}");
+    loop {
+        let now_ms = now_timestamp_ms();
+        let current = CUR_NONCE.load(Ordering::Relaxed);
+
+        if current > now_ms + 1000 {
+            info!("nonce progressed too far ahead {current} {now_ms}");
+        }
+
+        // Prevent returning stale values by jumping forward to "now" when lagging too far.
+        let target = if current.saturating_add(5000) < now_ms {
+            now_ms
+        } else {
+            current
+        };
+
+        let next = target.saturating_add(1);
+
+        match CUR_NONCE.compare_exchange(
+            current,
+            next,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => return target,
+            Err(_) => continue,
+        }
     }
-    // more than 300 seconds behind
-    if nonce + 5000 < now_ms {
-        CUR_NONCE.fetch_max(now_ms + 1, Ordering::Relaxed);
-        return now_ms;
-    }
-    nonce
 }
 
 pub(crate) const WIRE_DECIMALS: u8 = 8;
